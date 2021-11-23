@@ -1,4 +1,4 @@
-# Test task
-API service [Andreev Kirill](https://t.me/kill_rilll)
+# Тестовое задание от Secure-T
+[Andreev Kirill](https://t.me/kill_rilll)
 
 
