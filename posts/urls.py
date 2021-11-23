@@ -1,12 +1,14 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from .views import PostViewSet, CommentView, CommentMixinsView
+from .views import PostViewSet, CommentView, CommentMixinsView, CommentCreateView
+
+
 
 
 urlpatterns = [
     path('comments/<int:pk>/', CommentMixinsView.as_view()),
-    path('comments/create/', CommentView.as_view()),
+    path('comments/create/', CommentCreateView.as_view()),
 
     path('posts/<int:pk>/comments/', CommentView.as_view()),
     path('posts/', PostViewSet.as_view({'get': 'list'})),

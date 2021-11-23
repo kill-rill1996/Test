@@ -1,24 +1,15 @@
-from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.generics import GenericAPIView
-from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, RetrieveModelMixin, UpdateModelMixin
+from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework import status
 
 from .models import Comment, Post
-from .permissions import IsPostOwnerPermission
+from .permissions import IsPostOwnerPermission, IsCommentOwnerPermissionOrReadOnly
 from .utils import create_comments_tree
-from .serializers import PostModelSerializer, CommentSerializer
+from .serializers import PostModelSerializer, CommentSerializer, CommentCreateSerializer
 
 from rest_framework.viewsets import ModelViewSet
-
-# def index_view(request):
-#     comments = Post.objects.first().comments.all()
-#     print(comments)
-#     result = create_comments_tree(comments)
-#     print(result)
-#     return render(request, 'index.html', {'comments_tree': result})
 
 
 class PostViewSet(ModelViewSet):
@@ -40,33 +31,64 @@ class PostViewSet(ModelViewSet):
 
 
 class CommentView(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request, pk):
-        post = get_object_or_404(Post, id=pk)
-        comments_tree = create_comments_tree(post.comments.all())
+        comments = Comment.objects.filter(post=pk)
+        comments_tree = create_comments_tree(comments)
         return Response(comments_tree)
 
+
+class CommentCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        try:
-            data = request.data
-            if data['parent']:
-                data['is_child'] = True
-                # if Comment.objects.get(id=data['parent']).post != data['post']:
-                #     return Response(status=status.HTTP_400_BAD_REQUEST)
-            comment = CommentSerializer(data=request.data)
-            if comment.is_valid():
-                comment.save()
+        serializer = CommentCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            # chek if parent in request
+            if serializer.data.get('parent'):
+                # get post
+                try:
+                    post = Post.objects.get(id=serializer.data['post'])
+                except Post.DoesNotExist:
+                    return Response(status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    # get parent and check its in that post
+                    parent = Comment.objects.get(id=serializer.data['parent'])
+                    post_comments = post.comments.all()
+                    if parent not in post_comments:
+                        return Response(status=status.HTTP_400_BAD_REQUEST)
+                    comment = Comment.objects.create(
+                        post=post,
+                        user=request.user,
+                        text=serializer.data['text'],
+                        is_child=serializer.data['is_child'],
+                        parent=parent
+                    )
+                    comment.save()
+                except Comment.DoesNotExist:
+                    return Response(status=status.HTTP_400_BAD_REQUEST)
+            # not parent in request
             else:
-                return Response(status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    post = Post.objects.get(id=serializer.data['post'])
+                except Post.DoesNotExist:
+                    return Response(status=status.HTTP_400_BAD_REQUEST)
+
+                comment = Comment.objects.create(
+                    post=post,
+                    user=request.user,
+                    text=serializer.data['text'],
+                    is_child=serializer.data['is_child']
+                )
+                comment.save()
             return Response(status=status.HTTP_201_CREATED)
-        except AssertionError:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
-class CommentMixinsView(GenericAPIView, DestroyModelMixin, UpdateModelMixin, RetrieveModelMixin):
+class CommentMixinsView(RetrieveUpdateDestroyAPIView):
     serializer_class = CommentSerializer
     queryset = Comment.objects.all()
+    permission_classes = [IsCommentOwnerPermissionOrReadOnly]
 
     def delete(self, request, *args, **kwargs):
         return self.destroy(request, *args, **kwargs)

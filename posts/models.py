@@ -33,4 +33,4 @@ class Comment(models.Model):
         return self.parent.id
 
     def __str__(self):
-        return f'Comment {self.id} to post {self.post}'
+        return f'{self.id}'
